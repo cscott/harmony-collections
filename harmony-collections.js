@@ -25,6 +25,11 @@
 void function(string_, object_, function_, prototype_, toString_,
               Array, Object, Function, FP, global, exports, undefined_, undefined){
 
+  // Use a hidden __MapData__ property instead of a WeakMap to store the
+  // internal [[MapData]] property for a Map/Set.  This greatly improves
+  // speed, but WeakMap won't be exported if it is set.
+  var FAST = true;
+
   var getProperties = Object.getOwnPropertyNames,
       es5 = typeof getProperties === function_ && !(prototype_ in getProperties);
 
@@ -172,6 +177,28 @@ void function(string_, object_, function_, prototype_, toString_,
         }
       }
 
+      return MapData;
+    })()
+    : FAST ? (function() {
+      var MapData = function(name) {
+          this.get = function(o) { return o.__MapData__; };
+                  this.set = function(o, v) { return o.__MapData__ = v; };
+                  if (name) {
+                          this.wrap = function(o, v) {
+                                  if (o.__MapData__) {
+                                          throw new TypeError("Object is already a " + name);
+                                  }
+                                  defineProperty(o, '__MapData__', { value: v });
+                          };
+                          this.unwrap = function(o) {
+                                  var storage = o.__MapData__;
+                                  if (!storage) {
+                                          throw new TypeError(name + " is not generic");
+                                  }
+                                  return storage;
+                          };
+                  }
+      };
       return MapData;
     })()
     : (function(){
@@ -790,6 +817,8 @@ void function(string_, object_, function_, prototype_, toString_,
     delete_ = fixDelete(delete_, ['mdelete', 'unwrap'], [mdelete, unwrap]);
     return [Set, add, has, delete_, size, forEach];
   });
+
+  if (FAST) { delete exports.WeakMap; }
 }('string', 'object', 'function', 'prototype', 'toString',
   Array, Object, Function, Function.prototype, (0, eval)('this'),
   typeof exports === 'undefined' ? this : exports, {});
